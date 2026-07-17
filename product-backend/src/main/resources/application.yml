@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: product-backend
+
+similar:
+  products:
+    api:
+      base-url: http://localhost:3001
