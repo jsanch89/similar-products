@@ -1,0 +1,11 @@
+services:
+  product-backend:
+    build:
+      context: ./product-backend
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - SIMILAR_PRODUCTS_API_BASE_URL=http://host.docker.internal:3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
