@@ -8,15 +8,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import java.util.List;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class ProductControllerTest {
@@ -27,41 +22,46 @@ class ProductControllerTest {
     @InjectMocks
     private ProductController productController;
 
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(productController).build();
+        webTestClient = WebTestClient.bindToController(productController).build();
     }
 
     @Test
-    void getSimilarProducts_returns200WithProducts() throws Exception {
+    void getSimilarProducts_returns200WithProducts() {
         String productId = "1";
-        List<Product> products = List.of(
+        when(productUseCase.similarProductsByIds(productId)).thenReturn(Flux.just(
                 Product.builder().id("2").name("Phone B").price(150.0).availability(true).build(),
                 Product.builder().id("3").name("Phone C").price(200.0).availability(false).build()
-        );
-        when(productUseCase.similarProductsByIds(productId)).thenReturn(products);
+        ));
 
-        mockMvc.perform(get("/product/{productId}/similar", productId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value("2"))
-                .andExpect(jsonPath("$[0].name").value("Phone B"))
-                .andExpect(jsonPath("$[0].price").value(150.0))
-                .andExpect(jsonPath("$[0].availability").value(true))
-                .andExpect(jsonPath("$[1].id").value("3"))
-                .andExpect(jsonPath("$[1].name").value("Phone C"))
-                .andExpect(jsonPath("$[1].availability").value(false));
+        webTestClient.get()
+                .uri("/product/{productId}/similar", productId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(2)
+                .jsonPath("$[0].id").isEqualTo("2")
+                .jsonPath("$[0].name").isEqualTo("Phone B")
+                .jsonPath("$[0].price").isEqualTo(150.0)
+                .jsonPath("$[0].availability").isEqualTo(true)
+                .jsonPath("$[1].id").isEqualTo("3")
+                .jsonPath("$[1].name").isEqualTo("Phone C")
+                .jsonPath("$[1].availability").isEqualTo(false);
     }
 
     @Test
-    void getSimilarProducts_returns200WithEmptyList_whenNoSimilarProducts() throws Exception {
+    void getSimilarProducts_returns200WithEmptyList_whenNoSimilarProducts() {
         String productId = "99";
-        when(productUseCase.similarProductsByIds(productId)).thenReturn(List.of());
+        when(productUseCase.similarProductsByIds(productId)).thenReturn(Flux.empty());
 
-        mockMvc.perform(get("/product/{productId}/similar", productId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+        webTestClient.get()
+                .uri("/product/{productId}/similar", productId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(0);
     }
 }

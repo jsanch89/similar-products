@@ -9,3 +9,4 @@ similar:
   products:
     api:
       base-url: http://localhost:3001
+      timeout-ms: 5000

@@ -1,104 +1,118 @@
 package com.julian.product_backend.infrastructure.adapter.out.api;
 
 import com.julian.product_backend.domain.model.Product;
-import com.julian.product_backend.infrastructure.adapter.out.api.dto.ProductApiResponse;
+import okhttp3.mockwebserver.MockResponse;
+import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.test.StepVerifier;
 
-import java.util.List;
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class SimilarProductsApiAdapterTest {
 
-    @Mock
-    private RestTemplate restTemplate;
-
-    @InjectMocks
+    private MockWebServer mockWebServer;
     private SimilarProductsApiAdapter adapter;
 
-    @Test
-    void findSimilarByProductId_returnsMappedProducts() {
-        String productId = "1";
-        String[] similarIds = {"2", "3"};
+    @BeforeEach
+    void setUp() throws IOException {
+        mockWebServer = new MockWebServer();
+        mockWebServer.start();
+        WebClient webClient = WebClient.builder()
+                .baseUrl(mockWebServer.url("/").toString())
+                .build();
+        adapter = new SimilarProductsApiAdapter(webClient);
+    }
 
-        ProductApiResponse response2 = buildApiResponse("2", "Phone B", 150.0, true);
-        ProductApiResponse response3 = buildApiResponse("3", "Phone C", 200.0, false);
-
-        when(restTemplate.getForObject(eq("/product/{productId}/similarids"), eq(String[].class), eq(productId)))
-                .thenReturn(similarIds);
-        when(restTemplate.getForObject(eq("/product/{productId}"), eq(ProductApiResponse.class), eq("2")))
-                .thenReturn(response2);
-        when(restTemplate.getForObject(eq("/product/{productId}"), eq(ProductApiResponse.class), eq("3")))
-                .thenReturn(response3);
-
-        List<Product> result = adapter.findSimilarByProductId(productId);
-
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).getId()).isEqualTo("2");
-        assertThat(result.get(0).getName()).isEqualTo("Phone B");
-        assertThat(result.get(0).getPrice()).isEqualTo(150.0);
-        assertThat(result.get(0).getAvailability()).isTrue();
-        assertThat(result.get(1).getId()).isEqualTo("3");
-        assertThat(result.get(1).getAvailability()).isFalse();
+    @AfterEach
+    void tearDown() throws IOException {
+        mockWebServer.shutdown();
     }
 
     @Test
-    void findSimilarByProductId_returnsEmptyList_whenSimilarIdsNotFound() {
-        String productId = "99";
-        when(restTemplate.getForObject(eq("/product/{productId}/similarids"), eq(String[].class), eq(productId)))
-                .thenThrow(HttpClientErrorException.NotFound.class);
+    void fetchSimilarIds_shouldReturnIds_whenResponseIsSuccessful() throws InterruptedException {
+        mockWebServer.enqueue(new MockResponse()
+                .setBody("[\"1\", \"2\", \"3\"]")
+                .addHeader("Content-Type", "application/json"));
 
-        List<Product> result = adapter.findSimilarByProductId(productId);
+        StepVerifier.create(adapter.fetchSimilarIds("1"))
+                .expectNext("1", "2", "3")
+                .verifyComplete();
 
-        assertThat(result).isEmpty();
+        RecordedRequest recordedRequest = mockWebServer.takeRequest(1, TimeUnit.SECONDS);
+        assertThat(recordedRequest).isNotNull();
+        assertThat(recordedRequest.getPath()).isEqualTo("/product/1/similarids");
     }
 
     @Test
-    void findSimilarByProductId_skipsProduct_whenDetailNotFound() {
-        String productId = "1";
-        String[] similarIds = {"2", "3"};
+    void fetchSimilarIds_shouldReturnEmptyFlux_whenResponseIsEmptyArray() {
+        mockWebServer.enqueue(new MockResponse()
+                .setBody("[]")
+                .addHeader("Content-Type", "application/json"));
 
-        ProductApiResponse response2 = buildApiResponse("2", "Phone B", 150.0, true);
-
-        when(restTemplate.getForObject(eq("/product/{productId}/similarids"), eq(String[].class), eq(productId)))
-                .thenReturn(similarIds);
-        when(restTemplate.getForObject(eq("/product/{productId}"), eq(ProductApiResponse.class), eq("2")))
-                .thenReturn(response2);
-        when(restTemplate.getForObject(eq("/product/{productId}"), eq(ProductApiResponse.class), eq("3")))
-                .thenThrow(HttpClientErrorException.NotFound.class);
-
-        List<Product> result = adapter.findSimilarByProductId(productId);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo("2");
+        StepVerifier.create(adapter.fetchSimilarIds("1"))
+                .verifyComplete();
     }
 
     @Test
-    void findSimilarByProductId_returnsEmptyList_whenSimilarIdsResponseIsNull() {
-        String productId = "1";
-        when(restTemplate.getForObject(eq("/product/{productId}/similarids"), eq(String[].class), eq(productId)))
-                .thenReturn(null);
+    void fetchSimilarIds_shouldReturnEmptyFlux_whenNotFound() {
+        mockWebServer.enqueue(new MockResponse().setResponseCode(404));
 
-        List<Product> result = adapter.findSimilarByProductId(productId);
-
-        assertThat(result).isEmpty();
+        StepVerifier.create(adapter.fetchSimilarIds("unknown"))
+                .verifyComplete();
     }
 
-    private ProductApiResponse buildApiResponse(String id, String name, Double price, Boolean availability) {
-        ProductApiResponse response = new ProductApiResponse();
-        response.setId(id);
-        response.setName(name);
-        response.setPrice(price);
-        response.setAvailability(availability);
-        return response;
+    @Test
+    void fetchSimilarIds_shouldPropagateError_whenServerError() {
+        mockWebServer.enqueue(new MockResponse().setResponseCode(500));
+
+        StepVerifier.create(adapter.fetchSimilarIds("1"))
+                .expectError()
+                .verify();
+    }
+
+    @Test
+    void fetchProductDetail_shouldReturnProduct_whenResponseIsSuccessful() throws InterruptedException {
+        mockWebServer.enqueue(new MockResponse()
+                .setBody("{\"id\":\"1\",\"name\":\"Product 1\",\"price\":10.5,\"availability\":true}")
+                .addHeader("Content-Type", "application/json"));
+
+        Product expected = Product.builder()
+                .id("1")
+                .name("Product 1")
+                .price(10.5)
+                .availability(true)
+                .build();
+
+        StepVerifier.create(adapter.fetchProductDetail("1"))
+                .expectNext(expected)
+                .verifyComplete();
+
+        RecordedRequest recordedRequest = mockWebServer.takeRequest(1, TimeUnit.SECONDS);
+        assertThat(recordedRequest).isNotNull();
+        assertThat(recordedRequest.getPath()).isEqualTo("/product/1");
+    }
+
+    @Test
+    void fetchProductDetail_shouldReturnEmptyMono_whenNotFound() {
+        mockWebServer.enqueue(new MockResponse().setResponseCode(404));
+
+        StepVerifier.create(adapter.fetchProductDetail("unknown"))
+                .verifyComplete();
+    }
+
+    @Test
+    void fetchProductDetail_shouldPropagateError_whenServerError() {
+        mockWebServer.enqueue(new MockResponse().setResponseCode(500));
+
+        StepVerifier.create(adapter.fetchProductDetail("1"))
+                .expectError()
+                .verify();
     }
 }

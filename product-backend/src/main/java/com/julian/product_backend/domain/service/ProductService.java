@@ -4,8 +4,7 @@ import com.julian.product_backend.domain.model.Product;
 import com.julian.product_backend.domain.port.in.ProductUseCase;
 import com.julian.product_backend.domain.port.out.ProductRepositoryPort;
 import lombok.RequiredArgsConstructor;
-
-import java.util.List;
+import reactor.core.publisher.Flux;
 
 @RequiredArgsConstructor
 public class ProductService implements ProductUseCase {
@@ -13,7 +12,8 @@ public class ProductService implements ProductUseCase {
     private final ProductRepositoryPort productRepositoryPort;
 
     @Override
-    public List<Product> similarProductsByIds(String productId) {
-        return productRepositoryPort.findSimilarByProductId(productId);
+    public Flux<Product> similarProductsByIds(String productId) {
+        return productRepositoryPort.fetchSimilarIds(productId)
+                .flatMap(productRepositoryPort::fetchProductDetail);
     }
 }

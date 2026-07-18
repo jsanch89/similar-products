@@ -7,10 +7,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,25 +26,28 @@ class ProductServiceTest {
     @Test
     void similarProductsByIds_returnsProductsFromRepository() {
         String productId = "1";
-        List<Product> expected = List.of(
-                Product.builder().id("2").name("Phone B").price(150.0).availability(true).build(),
-                Product.builder().id("3").name("Phone C").price(200.0).availability(false).build()
-        );
-        when(productRepositoryPort.findSimilarByProductId(productId)).thenReturn(expected);
+        Product p2 = Product.builder().id("2").name("Phone B").price(150.0).availability(true).build();
+        Product p3 = Product.builder().id("3").name("Phone C").price(200.0).availability(false).build();
 
-        List<Product> result = productService.similarProductsByIds(productId);
+        when(productRepositoryPort.fetchSimilarIds(productId)).thenReturn(Flux.just("2", "3"));
+        when(productRepositoryPort.fetchProductDetail("2")).thenReturn(Mono.just(p2));
+        when(productRepositoryPort.fetchProductDetail("3")).thenReturn(Mono.just(p3));
 
-        assertThat(result).isEqualTo(expected);
-        verify(productRepositoryPort).findSimilarByProductId(productId);
+        StepVerifier.create(productService.similarProductsByIds(productId))
+                .expectNext(p2, p3)
+                .verifyComplete();
+
+        verify(productRepositoryPort).fetchSimilarIds(productId);
+        verify(productRepositoryPort).fetchProductDetail("2");
+        verify(productRepositoryPort).fetchProductDetail("3");
     }
 
     @Test
-    void similarProductsByIds_returnsEmptyList_whenNoSimilarProductsFound() {
+    void similarProductsByIds_returnsEmptyFlux_whenNoSimilarProductsFound() {
         String productId = "99";
-        when(productRepositoryPort.findSimilarByProductId(productId)).thenReturn(List.of());
+        when(productRepositoryPort.fetchSimilarIds(productId)).thenReturn(Flux.empty());
 
-        List<Product> result = productService.similarProductsByIds(productId);
-
-        assertThat(result).isEmpty();
+        StepVerifier.create(productService.similarProductsByIds(productId))
+                .verifyComplete();
     }
 }

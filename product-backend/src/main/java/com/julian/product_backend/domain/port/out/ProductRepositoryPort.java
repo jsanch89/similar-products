@@ -1,9 +1,13 @@
 package com.julian.product_backend.domain.port.out;
 
 import com.julian.product_backend.domain.model.Product;
-
-import java.util.List;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public interface ProductRepositoryPort {
-    List<Product> findSimilarByProductId(String productId);
+
+    Flux<String> fetchSimilarIds(String productId);
+
+    Mono<Product> fetchProductDetail(String productId);
+    
 }

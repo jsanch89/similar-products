@@ -4,56 +4,36 @@ import com.julian.product_backend.domain.model.Product;
 import com.julian.product_backend.domain.port.out.ProductRepositoryPort;
 import com.julian.product_backend.infrastructure.adapter.out.api.dto.ProductApiResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class SimilarProductsApiAdapter implements ProductRepositoryPort {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
 
-    @Override
-    public List<Product> findSimilarByProductId(String productId) {
-        List<Product> products = new ArrayList<>();
-        for (String similarId : fetchSimilarIds(productId)) {
-            fetchProductDetail(similarId).ifPresent(products::add);
-        }
-        return products;
+    public Flux<String> fetchSimilarIds(String productId) {
+        return webClient.get()
+                .uri("/product/{productId}/similarids", productId)
+                .retrieve()
+                .bodyToMono(String[].class)
+                .flatMapMany(Flux::fromArray)
+                .onErrorResume(WebClientResponseException.NotFound.class, e -> Flux.empty());
     }
 
-    private List<String> fetchSimilarIds(String productId) {
-        try {
-            String[] response = restTemplate.getForObject(
-                    "/product/{productId}/similarids",
-                    String[].class,
-                    productId
-            );
-            return Optional.ofNullable(response)
-                    .map(Arrays::asList)
-                    .orElse(Collections.emptyList());
-        } catch (HttpClientErrorException.NotFound e) {
-            return Collections.emptyList();
-        }
-    }
-
-    private Optional<Product> fetchProductDetail(String productId) {
-        try {
-            ProductApiResponse response = restTemplate.getForObject(
-                    "/product/{productId}",
-                    ProductApiResponse.class,
-                    productId
-            );
-            return Optional.ofNullable(response).map(ProductApiResponse::toDomain);
-        } catch (HttpClientErrorException.NotFound e) {
-            return Optional.empty();
-        }
+    public Mono<Product> fetchProductDetail(String productId) {
+        return webClient.get()
+                .uri("/product/{productId}", productId)
+                .retrieve()
+                .bodyToMono(ProductApiResponse.class)
+                .map(ProductApiResponse::toDomain)
+                .onErrorResume(WebClientResponseException.NotFound.class, e -> Mono.empty());
     }
 }

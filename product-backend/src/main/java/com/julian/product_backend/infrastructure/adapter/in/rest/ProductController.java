@@ -1,6 +1,5 @@
 package com.julian.product_backend.infrastructure.adapter.in.rest;
 
-import com.julian.product_backend.domain.model.Product;
 import com.julian.product_backend.domain.port.in.ProductUseCase;
 import com.julian.product_backend.infrastructure.adapter.in.rest.dto.ProductResponse;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -20,11 +20,10 @@ public class ProductController {
     private final ProductUseCase productUseCase;
 
     @GetMapping("/{productId}/similar")
-    public ResponseEntity<List<ProductResponse>> getSimilarProducts(@PathVariable String productId) {
-        List<Product> products = productUseCase.similarProductsByIds(productId);
-        List<ProductResponse> response = products.stream()
+    public Mono<ResponseEntity<List<ProductResponse>>> getSimilarProducts(@PathVariable String productId) {
+        return productUseCase.similarProductsByIds(productId)
                 .map(ProductResponse::fromDomain)
-                .toList();
-        return ResponseEntity.ok(response);
+                .collectList()
+                .map(ResponseEntity::ok);
     }
 }
