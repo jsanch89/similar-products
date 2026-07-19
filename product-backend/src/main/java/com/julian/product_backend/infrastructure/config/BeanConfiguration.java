@@ -5,17 +5,14 @@ import com.julian.product_backend.domain.service.ProductService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.DefaultUriBuilderFactory;
+import org.springframework.web.client.RestClient;
 
 @Configuration
 public class BeanConfiguration {
 
     @Bean
-    public RestTemplate restTemplate(@Value("${similar.products.api.base-url}") String baseUrl) {
-        RestTemplate restTemplate = new RestTemplate();
-        restTemplate.setUriTemplateHandler(new DefaultUriBuilderFactory(baseUrl));
-        return restTemplate;
+    public RestClient restClient(@Value("${similar.products.api.base-url}") String baseUrl) {
+        return RestClient.builder().baseUrl(baseUrl).build();
     }
 
     @Bean

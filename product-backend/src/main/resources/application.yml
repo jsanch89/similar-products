@@ -9,3 +9,9 @@ similar:
   products:
     api:
       base-url: http://localhost:3001
+
+#logging:
+#  level:
+#    root: WARN
+  
+#    com.julian.product_backend.infrastructure.adapter.out.api: INFO

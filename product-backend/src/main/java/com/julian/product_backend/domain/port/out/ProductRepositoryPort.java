@@ -1,9 +1,13 @@
 package com.julian.product_backend.domain.port.out;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.julian.product_backend.domain.model.Product;
 
-import java.util.List;
-
 public interface ProductRepositoryPort {
-    List<Product> findSimilarByProductId(String productId);
+
+    List<String> fetchSimilarIds(String productId);
+
+    Optional<Product> fetchProductDetail(String similarId);
 }
