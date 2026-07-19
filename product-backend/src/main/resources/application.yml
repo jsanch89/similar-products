@@ -8,7 +8,7 @@ spring:
 similar:
   products:
     api:
-      base-url: http://localhost:3001
+      base-url: ${SIMILAR_PRODUCTS_API_BASE_URL:http://localhost:3001}
 
 #logging:
 #  level:
