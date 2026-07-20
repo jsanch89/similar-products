@@ -10,13 +10,28 @@ Feature: Similar Products API
     And one product should have id "2" and name "Product B"
     And one product should have id "3" and name "Product C"
 
-  Scenario: Return 404 when product does not exist
-    Given product "999" does not exist in the external API
-    When I request similar products for product "999"
+  Scenario Outline: Distinguish between a product with no similar products and one that does not exist
+    Given <precondition>
+    When I request similar products for product <productId>
+    Then the response status should be <expectedStatus>
+
+    Examples:
+      | precondition                                     | productId | expectedStatus |
+      | product "10" has no similar products             | "10"      | 200            |
+      | product "999" does not exist in the external API | "999"     | 404            |
+
+  Scenario: Return 404 for a product ID with invalid format
+    Given product "abc" does not exist in the external API
+    When I request similar products for product "abc"
     Then the response status should be 404
 
-  Scenario: Return empty list when product has no similar products
-    Given product "10" has no similar products
-    When I request similar products for product "10"
+  Scenario: Return empty list when the similarids external service responds with 5xx
+    Given the similarids service returns a 5xx error for product "5"
+    When I request similar products for product "5"
     Then the response status should be 200
     And the response should contain 0 products
+
+  Scenario: Return 500 when the external provider times out
+    Given the external provider times out for product "6"
+    When I request similar products for product "6"
+    Then the response status should be 500

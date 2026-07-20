@@ -11,7 +11,10 @@ import org.springframework.context.annotation.Bean;
 @CucumberContextConfiguration
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "similar.products.api.base-url=http://localhost:8089"
+        properties = {
+                "similar.products.api.base-url=http://localhost:8089",
+                "similar.products.api.timeout-ms=500"
+        }
 )
 public class CucumberSpringConfiguration {
 

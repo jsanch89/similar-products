@@ -14,7 +14,7 @@ class BeanConfigurationTest {
 
     @Test
     void restClient_isConfiguredWithBaseUrl() {
-        RestClient restClient = beanConfiguration.restClient("http://localhost:3001");
+        RestClient restClient = beanConfiguration.restClient("http://localhost:3001", 2000);
 
         assertThat(restClient).isNotNull();
     }

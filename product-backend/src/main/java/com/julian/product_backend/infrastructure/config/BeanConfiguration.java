@@ -5,14 +5,20 @@ import com.julian.product_backend.domain.service.ProductService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
 public class BeanConfiguration {
 
     @Bean
-    public RestClient restClient(@Value("${similar.products.api.base-url}") String baseUrl) {
-        return RestClient.builder().baseUrl(baseUrl).build();
+    public RestClient restClient(
+            @Value("${similar.products.api.base-url}") String baseUrl,
+            @Value("${similar.products.api.timeout-ms:2000}") int timeoutMs) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(timeoutMs);
+        factory.setReadTimeout(timeoutMs);
+        return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
     @Bean

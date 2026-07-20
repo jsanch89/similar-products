@@ -82,6 +82,24 @@ public class SimilarProductsSteps {
         );
     }
 
+    @Given("the similarids service returns a 5xx error for product {string}")
+    public void similaridsServiceReturns5xxError(String productId) {
+        CucumberSpringConfiguration.WIRE_MOCK_SERVER.stubFor(
+                get(urlEqualTo("/product/" + productId + "/similarids"))
+                        .willReturn(aResponse().withStatus(500))
+        );
+    }
+
+    @Given("the external provider times out for product {string}")
+    public void externalProviderTimesOutForProduct(String productId) {
+        CucumberSpringConfiguration.WIRE_MOCK_SERVER.stubFor(
+                get(urlEqualTo("/product/" + productId + "/similarids"))
+                        .willReturn(aResponse()
+                                .withStatus(200)
+                                .withFixedDelay(2000))
+        );
+    }
+
     @When("I request similar products for product {string}")
     public void iRequestSimilarProductsForProduct(String productId) {
         response = restTemplate.getForEntity(
