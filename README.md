@@ -193,6 +193,37 @@ At most 10 threads can be inside the adapter at the same time. Any thread that a
 
 An empty result from `fetchSimilarIds` means no similar products are returned (HTTP 200 with `[]`). An empty `Optional` from `fetchProductDetail` means that individual product is silently skipped; the rest still appear in the response.
 
+## Load Testing (k6)
+
+A k6 load test was used to validate performance and behavior under concurrent traffic. The test script hits `GET /product/{productId}/similar` with multiple virtual users and measures response times, error rates, and throughput.
+
+### HTTP client evolution
+
+The implementation went through several iterations, each benchmarked with k6:
+
+#### 1. RestTemplate
+The initial implementation used `RestTemplate`. Under load, requests to product `6` (which does not exist in the external API) consistently returned **HTTP 505** errors — the external API was propagating an unexpected response that `RestTemplate` surfaced as a server error with no graceful handling.
+
+#### 2. WebClient (reactive / async)
+Switching to `WebClient` and converting the application to a reactive, non-blocking model eliminated the 505 issue but introduced a noticeable **increase in average response time**. The overhead of the reactive pipeline (scheduler context switching, Flux/Mono assembly) did not benefit a workload that is inherently sequential (fetch IDs → fetch each detail), and tuning complexity increased significantly.
+
+#### 3. RestClient
+Replacing `WebClient` with Spring 6's `RestClient` (synchronous, modern API) restored **good execution times** comparable to the original `RestTemplate` baseline, while providing cleaner error handling and no 505 propagation. This became the production choice.
+
+#### 4. Refined load test — better logging and error handling
+A second round of load testing was run after improving structured logging and centralising error handling in `GlobalExceptionHandler`. The refined test confirmed that error scenarios (404, external 5xx, timeouts) were handled correctly and logged consistently without impacting the happy-path latency.
+
+#### 5. Resilience4j impact
+A final comparison was made between the baseline (plain `RestClient`) and the version with all four Resilience4j patterns active (Retry, Circuit Breaker, Bulkhead, Timeout). The results showed **minimal performance degradation** under normal conditions — the overhead introduced by the AOP interceptors is negligible on the happy path, while the protection gained during failure scenarios (retries, open circuit, bulkhead rejection) significantly improves overall system stability.
+
+### Running the load test
+
+```bash
+k6 run k6/load-test.js
+```
+
+Make sure the application and the external mock API are running before executing the test.
+
 ## Tests
 
 ### Unit tests
