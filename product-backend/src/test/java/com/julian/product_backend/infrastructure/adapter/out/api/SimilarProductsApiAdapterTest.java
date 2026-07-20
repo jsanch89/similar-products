@@ -3,6 +3,10 @@ package com.julian.product_backend.infrastructure.adapter.out.api;
 import com.julian.product_backend.domain.exception.ProductNotFoundException;
 import com.julian.product_backend.domain.model.Product;
 import com.julian.product_backend.infrastructure.adapter.out.api.dto.ProductApiResponse;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +45,14 @@ class SimilarProductsApiAdapterTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        adapter = new SimilarProductsApiAdapter(restClient);
+        // Isolate the adapter's mapping/fallback logic: no retries, default CB and bulkhead.
+        // Retry, circuit breaker and bulkhead behaviour is covered by SimilarProductsApiAdapterResilienceTest.
+        RetryRegistry retryRegistry = RetryRegistry.of(RetryConfig.custom().maxAttempts(1).build());
+        adapter = new SimilarProductsApiAdapter(
+                restClient,
+                CircuitBreakerRegistry.ofDefaults(),
+                retryRegistry,
+                BulkheadRegistry.ofDefaults());
         when(restClient.get()).thenReturn(requestHeadersUriSpec);
         when(requestHeadersUriSpec.uri(any(String.class), any(Object[].class))).thenReturn(requestHeadersSpec);
         when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
@@ -79,6 +90,8 @@ class SimilarProductsApiAdapterTest {
         when(responseSpec.body(String[].class))
                 .thenThrow(HttpServerErrorException.InternalServerError.class);
 
+        // Server errors are handled by the resilience decorators and mapped to the fallback.
+        // Retry/circuit-breaker behaviour is covered by SimilarProductsApiAdapterResilienceTest.
         List<String> result = adapter.fetchSimilarIds("1");
 
         assertThat(result).isEmpty();
@@ -111,6 +124,8 @@ class SimilarProductsApiAdapterTest {
         when(responseSpec.body(ProductApiResponse.class))
                 .thenThrow(HttpServerErrorException.InternalServerError.class);
 
+        // Server errors are handled by the resilience decorators and mapped to the fallback.
+        // Retry/circuit-breaker behaviour is covered by SimilarProductsApiAdapterResilienceTest.
         Optional<Product> result = adapter.fetchProductDetail("2");
 
         assertThat(result).isEmpty();

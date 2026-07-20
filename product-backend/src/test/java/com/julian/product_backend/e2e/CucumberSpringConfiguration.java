@@ -13,7 +13,11 @@ import org.springframework.context.annotation.Bean;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "similar.products.api.base-url=http://localhost:8089",
-                "similar.products.api.timeout-ms=500"
+                "similar.products.api.timeout-ms=500",
+                // No wait between retries so E2E tests run fast
+                "resilience4j.retry.instances.externalApi.wait-duration=0ms",
+                // Large window so the circuit never opens across scenarios
+                "resilience4j.circuitbreaker.instances.externalApi.sliding-window-size=1000"
         }
 )
 public class CucumberSpringConfiguration {

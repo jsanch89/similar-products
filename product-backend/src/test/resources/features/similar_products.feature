@@ -31,7 +31,8 @@ Feature: Similar Products API
     Then the response status should be 200
     And the response should contain 0 products
 
-  Scenario: Return 500 when the external provider times out
+  Scenario: Return empty list when the external provider times out
     Given the external provider times out for product "6"
     When I request similar products for product "6"
-    Then the response status should be 500
+    Then the response status should be 200
+    And the response should contain 0 products
