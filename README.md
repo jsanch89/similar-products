@@ -195,34 +195,82 @@ An empty result from `fetchSimilarIds` means no similar products are returned (H
 
 ## Load Testing (k6)
 
-A k6 load test was used to validate performance and behavior under concurrent traffic. The test script hits `GET /product/{productId}/similar` with multiple virtual users and measures response times, error rates, and throughput.
+A k6 load test was used to validate performance and behavior under concurrent traffic. The test script (from [dalogax/backendDevTest](https://github.com/dalogax/backendDevTest)) hits `GET /product/{productId}/similar` with multiple virtual users across five scenarios: `normal`, `notFound`, `error`, `slow`, and `verySlow`.
+
+```bash
+k6 run shared/k6/test.js
+```
 
 ### HTTP client evolution
 
-The implementation went through several iterations, each benchmarked with k6:
-
 #### 1. RestTemplate
+
 The initial implementation used `RestTemplate`. Under load, requests to product `6` (which does not exist in the external API) consistently returned **HTTP 505** errors — the external API was propagating an unexpected response that `RestTemplate` surfaced as a server error with no graceful handling.
 
+---
+
 #### 2. WebClient (reactive / async)
+
 Switching to `WebClient` and converting the application to a reactive, non-blocking model eliminated the 505 issue but introduced a noticeable **increase in average response time**. The overhead of the reactive pipeline (scheduler context switching, Flux/Mono assembly) did not benefit a workload that is inherently sequential (fetch IDs → fetch each detail), and tuning complexity increased significantly.
 
-#### 3. RestClient
+**Request duration**
+![WebClient - http-req duration](docs/load-test/webclient-duration.png)
+
+Mean: **120 ms**. Spikes still reach **5–6 K ms** on `slow`/`verySlow` — no timeout or circuit breaker to cap them.
+
+**Request counts by scenario and status**
+![WebClient - request counts](docs/load-test/webclient-requests.png)
+
+`error`, `slow`, and `verySlow` propagate as HTTP **500** — without a fallback, upstream failures surface directly to the client.
+
+---
+
+#### 3. RestClient (sync, no resilience)
+
 Replacing `WebClient` with Spring 6's `RestClient` (synchronous, modern API) restored **good execution times** comparable to the original `RestTemplate` baseline, while providing cleaner error handling and no 505 propagation. This became the production choice.
 
+**Request duration**
+![Sync - http-req duration](docs/load-test/sync-duration.png)
+
+Mean: **387 ms**. Spikes reaching **6–7 K ms** as blocking threads pile up during `slow`/`verySlow` scenarios, exhausting the thread pool.
+
+**Request counts by scenario and status**
+![Sync - request counts](docs/load-test/sync-requests.png)
+
+`error`/`slow` return 200 (partial fallback). `notFound` correctly returns 404. No isolation — upstream slowness bleeds directly into all concurrent callers.
+
+---
+
 #### 4. Refined load test — better logging and error handling
+
 A second round of load testing was run after improving structured logging and centralising error handling in `GlobalExceptionHandler`. The refined test confirmed that error scenarios (404, external 5xx, timeouts) were handled correctly and logged consistently without impacting the happy-path latency.
 
-#### 5. Resilience4j impact
-A final comparison was made between the baseline (plain `RestClient`) and the version with all four Resilience4j patterns active (Retry, Circuit Breaker, Bulkhead, Timeout). The results showed **minimal performance degradation** under normal conditions — the overhead introduced by the AOP interceptors is negligible on the happy path, while the protection gained during failure scenarios (retries, open circuit, bulkhead rejection) significantly improves overall system stability.
+---
 
-### Running the load test
+#### 5. Resilience4J + RestClient
 
-```bash
-k6 run k6/load-test.js
-```
+A final comparison was made between the baseline (plain `RestClient`) and the version with all four Resilience4j patterns active (Retry, Circuit Breaker, Bulkhead, Timeout). The results showed **minimal performance degradation** under normal conditions — the overhead introduced by the AOP interceptors is negligible on the happy path, while the protection gained during failure scenarios significantly improves overall system stability.
 
-Make sure the application and the external mock API are running before executing the test.
+**Request duration**
+![Resilience4J - http-req duration](docs/load-test/resilience4j-duration.png)
+
+Latency scale drops to **500 ms max**. Peak spikes capped at ~**400 ms** — the 2-second timeout + open circuit prevents any call from blocking long.
+
+**Request counts by scenario and status**
+![Resilience4J - request counts](docs/load-test/resilience4j-requests.png)
+
+**All scenarios return 200** — retry + circuit breaker + bulkhead funnel failures into the fallback (empty list). `notFound` still correctly returns **404**.
+
+---
+
+### Summary
+
+| Metric | WebClient (async) | RestClient (sync) | RestClient + Resilience4J |
+|---|---|---|---|
+| Mean latency | ~120 ms | ~387 ms | <100 ms (stable) |
+| Max spikes | ~6 K ms | ~7 K ms | ~400 ms |
+| Errors under failure | **500** | 200 (partial) | 200 (fallback) |
+| Upstream isolation | None | None | Timeout + CB + Bulkhead + Retry |
 
 ## Tests
 
