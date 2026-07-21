@@ -152,6 +152,8 @@ resilience4j:
       externalApi:
         sliding-window-size: 10
         failure-rate-threshold: 50        # opens when ≥ 50 % of the last 10 calls fail
+        slow-call-rate-threshold: 50      # opens when ≥ 50 % of the last 10 calls are slow
+        slow-call-duration-threshold: 1s  # a call taking > 1 s counts as slow
         wait-duration-in-open-state: 10s  # stays open for 10 s before testing again
         permitted-number-of-calls-in-half-open-state: 3
         ignore-exceptions:
@@ -162,7 +164,7 @@ States:
 
 | State | Behaviour |
 |---|---|
-| **CLOSED** | Normal. Failures are counted in the sliding window. |
+| **CLOSED** | Normal. Both failures and slow calls (> 1 s) are counted in the sliding window. |
 | **OPEN** | All calls are short-circuited immediately; the fallback returns an empty result. No HTTP requests are made. |
 | **HALF-OPEN** | 3 probe calls are allowed; if they succeed the circuit closes, otherwise it opens again. |
 

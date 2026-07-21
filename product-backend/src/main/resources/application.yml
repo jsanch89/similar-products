@@ -20,6 +20,8 @@ resilience4j:
       externalApi:
         sliding-window-size: 10
         failure-rate-threshold: 50
+        slow-call-rate-threshold: 50        # opens when ≥ 50 % of the last 10 calls are slow
+        slow-call-duration-threshold: 1s    # a call taking > 1s counts as slow
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
         ignore-exceptions:
