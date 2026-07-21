@@ -4,7 +4,7 @@ services:
       context: ./product-backend
       dockerfile: Dockerfile
     ports:
-      - "5001:5000"
+      - "5000:5000"
     environment:
       - SIMILAR_PRODUCTS_API_BASE_URL=http://host.docker.internal:3001
     extra_hosts:
